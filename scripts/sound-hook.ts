@@ -12,7 +12,7 @@ const SCV = join(PLUGIN_ROOT, "sounds", "SCV");
 const ADVISOR = join(PLUGIN_ROOT, "sounds", "Advisor");
 const MISC = join(PLUGIN_ROOT, "sounds", "misc");
 const LOCKFILE_TTL_MS = 60_000;
-const LOG_DIR = "/home/graff/.claude/logs";
+const LOG_DIR = join(process.env.HOME ?? homedir(), ".claude", "logs");
 const LOG_FILE = join(LOG_DIR, "sound-hook.log");
 const PLAYER = detectPlayer();
 
@@ -142,24 +142,9 @@ async function hasErrors(transcriptPath?: string): Promise<boolean> {
 }
 
 export function parseTranscriptErrors(content: string): boolean {
-	const lines = content.split("\n").filter(Boolean);
-	const lastUserLine = findLastUserLineIndex(lines);
-	return lines
-		.slice(lastUserLine + 1)
-		.flatMap(tryParseJson)
-		.some(isToolError);
-}
-
-function findLastUserLineIndex(lines: string[]): number {
-	for (let i = lines.length - 1; i >= 0; i--) {
-		const line = lines[i];
-		if (
-			line !== undefined &&
-			(line.includes('"role":"user"') || line.includes('"role": "user"'))
-		)
-			return i;
-	}
-	return -1;
+	const entries = content.split("\n").filter(Boolean).flatMap(tryParseJson);
+	const lastUserIndex = findLastUserIndex(entries);
+	return entries.slice(lastUserIndex + 1).some(isToolError);
 }
 
 function tryParseJson(line: string): unknown[] {
@@ -249,7 +234,10 @@ async function readStdin(): Promise<HookInput> {
 	const raw = (await Bun.stdin.text()).trim();
 	if (!raw) return {};
 	try {
-		return JSON.parse(raw);
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+			return {};
+		return parsed as HookInput;
 	} catch {
 		return {};
 	}
