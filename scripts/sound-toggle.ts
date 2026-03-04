@@ -3,7 +3,7 @@
 
 import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isMuted, route } from "./sound-hook.ts";
+import { type ClaudeEvent, isMuted, route } from "./sound-hook.ts";
 
 const home = process.env.HOME ?? homedir();
 const sentinel = `${home}/.claude/sound-muted`;
@@ -21,10 +21,12 @@ async function mute(): Promise<void> {
 	console.log("Sound notifications: MUTED");
 }
 
+const UNMUTE_EVENT: ClaudeEvent = "SessionStart";
+
 async function unmute(): Promise<void> {
 	await unlink(sentinel);
 	console.log("Sound notifications: UNMUTED");
-	await route("SessionStart", { session_id: "toggle" });
+	await route(UNMUTE_EVENT, { session_id: "toggle" });
 }
 
 await toggle();

@@ -1,7 +1,8 @@
 // Tests for sound-hook.ts — covers transcript error detection and turn-index logic
 // These are the highest-risk paths: wrong result here plays wrong sound silently
 
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -112,14 +113,24 @@ describe("lockfileValidAndFresh", () => {
 });
 
 describe("isMuted", () => {
-	const sentinel = `${process.env.HOME}/.claude/sound-muted`;
+	let tmpHome: string;
+
+	beforeAll(() => {
+		tmpHome = mkdtempSync("/tmp/sound-hook-test-home-");
+		mkdirSync(join(tmpHome, ".claude"));
+		process.env.HOME = tmpHome;
+	});
+
+	afterAll(() => {
+		rmSync(tmpHome, { recursive: true, force: true });
+	});
 
 	it("returns false when sentinel file absent", async () => {
-		if (await Bun.file(sentinel).exists()) await unlink(sentinel);
 		expect(await isMuted()).toBe(false);
 	});
 
 	it("returns true when sentinel file exists", async () => {
+		const sentinel = join(tmpHome, ".claude", "sound-muted");
 		await Bun.write(sentinel, "");
 		try {
 			expect(await isMuted()).toBe(true);

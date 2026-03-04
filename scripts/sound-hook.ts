@@ -14,9 +14,8 @@ const MISC = join(PLUGIN_ROOT, "sounds", "misc");
 const LOCKFILE_TTL_MS = 60_000;
 const LOG_DIR = join(process.env.HOME ?? homedir(), ".claude", "logs");
 const LOG_FILE = join(LOG_DIR, "sound-hook.log");
-const PLAYER = detectPlayer();
 
-type ClaudeEvent =
+export type ClaudeEvent =
 	| "SessionStart"
 	| "UserPromptSubmit"
 	| "PreToolUse"
@@ -71,7 +70,7 @@ const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
 async function main(event: string): Promise<void> {
 	if (await isMuted()) return;
 	const input = await readStdin();
-	await route(event, input);
+	await route(event, input, detectPlayer());
 }
 
 export async function isMuted(): Promise<boolean> {
@@ -79,17 +78,30 @@ export async function isMuted(): Promise<boolean> {
 	return Bun.file(`${home}/.claude/sound-muted`).exists();
 }
 
-export async function route(event: string, input: HookInput): Promise<void> {
-	const spec = EVENT_SOUNDS[event as ClaudeEvent];
-	if (!spec) return;
-	await dispatch(spec, input);
+function isClaudeEvent(s: string): s is ClaudeEvent {
+	return s in EVENT_SOUNDS;
 }
 
-async function dispatch(spec: SoundSpec, input: HookInput): Promise<void> {
+export async function route(
+	event: string,
+	input: HookInput,
+	player: string | null = detectPlayer(),
+): Promise<void> {
+	if (!isClaudeEvent(event)) return;
+	const spec = EVENT_SOUNDS[event];
+	if (!spec) return;
+	await dispatch(spec, input, player);
+}
+
+async function dispatch(
+	spec: SoundSpec,
+	input: HookInput,
+	player: string | null,
+): Promise<void> {
 	const sessionId = input.session_id ?? "unknown";
 	await writeLockfileIfNeeded(spec.lockfile, sessionId);
 	if (!(await passesTurnGate(spec.lockfile, sessionId))) return;
-	await playWithLogging(spec, input.transcript_path, input.hook_event_name);
+	await playWithLogging(spec, player, input.transcript_path, input.hook_event_name);
 }
 
 async function writeLockfileIfNeeded(
@@ -109,11 +121,12 @@ async function passesTurnGate(
 
 async function playWithLogging(
 	spec: SoundSpec,
+	player: string | null,
 	transcriptPath?: string,
 	eventName?: string,
 ): Promise<void> {
 	const pool = await resolvePool(spec, transcriptPath);
-	play(spec.dir, pool);
+	play(spec.dir, pool, player);
 	await log(eventName ?? "unknown", pool);
 }
 
@@ -161,15 +174,15 @@ function isToolError(e: unknown): boolean {
 	return entry.tool_result?.is_error === true;
 }
 
-function play(dir: string, pool: string): void {
+function play(dir: string, pool: string, player: string | null): void {
 	const files = poolFor(dir, pool);
 	if (files.length === 0) return;
-	playSound(randomFrom(files));
+	playSound(randomFrom(files), player);
 }
 
-function playSound(path: string): void {
-	if (!PLAYER) return;
-	const proc = Bun.spawn([PLAYER, path], {
+function playSound(path: string, player: string | null): void {
+	if (!player) return;
+	const proc = Bun.spawn([player, path], {
 		stdout: "ignore",
 		stderr: "ignore",
 	});
