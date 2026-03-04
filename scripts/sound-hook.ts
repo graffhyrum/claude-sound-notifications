@@ -3,13 +3,14 @@
 
 import { mkdirSync, readdirSync } from "node:fs";
 import { appendFile, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { stdin } from "bun";
 
 const PLUGIN_ROOT =
 	process.env.CLAUDE_PLUGIN_ROOT ?? join(import.meta.dir, "..");
-const SCV = join(PLUGIN_ROOT, "SCV");
-const ADVISOR = join(PLUGIN_ROOT, "Advisor");
+const SCV = join(PLUGIN_ROOT, "sounds", "SCV");
+const ADVISOR = join(PLUGIN_ROOT, "sounds", "Advisor");
+const MISC = join(PLUGIN_ROOT, "sounds", "misc");
 const LOCKFILE_TTL_MS = 60_000;
 const LOG_DIR = "/home/graff/.claude/logs";
 const LOG_FILE = join(LOG_DIR, "sound-hook.log");
@@ -50,26 +51,32 @@ type HookInput = {
 };
 
 const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
-  SessionStart:       { dir: ADVISOR, pool: "ADJ_ONL"                         },
-  UserPromptSubmit:   { dir: SCV,     pool: "tscyes",  lockfile: "write"     },
-  PreToolUse:         { dir: SCV,     pool: "tsctra",  lockfile: "consume"   },
-  PermissionRequest:  { dir: SCV,     pool: "tscpss"                         },
-  PostToolUseFailure: { dir: SCV,     pool: "tscerr"                         },
-  Notification:       { dir: SCV,     pool: "tscupd"                         },
-  SubagentStart:      { dir: SCV,     pool: "tscrdy"                         },
-  SubagentStop:       { dir: SCV,     pool: "tadupd",  errorPool: "tscdth"   },
-  Stop:               { dir: ADVISOR, pool: "tadupd06",  errorPool: "taderr"   },
-  TeammateIdle:       { dir: SCV,     pool: "tscpss"                         },
-  TaskCompleted:      { dir: ADVISOR, pool: "tadupd"                         },
-  WorktreeCreate:     { dir: SCV,     pool: "edrrep"                         },
-  WorktreeRemove:     { dir: SCV,     pool: "tscdth"                         },
-  PreCompact:         { dir: SCV,     pool: "tscmin"                         },
-  SessionEnd:         { dir: ADVISOR, pool: "tadupd",  errorPool: "taderr"   },
-}
+	SessionStart: { dir: ADVISOR, pool: "adjutant_online" },
+	UserPromptSubmit: { dir: SCV, pool: "tscyes", lockfile: "write" },
+	PreToolUse: { dir: SCV, pool: "tscyes", lockfile: "consume" },
+	PermissionRequest: { dir: SCV, pool: "tscpss" },
+	PostToolUseFailure: { dir: ADVISOR, pool: "need" },
+	Notification: { dir: MISC, pool: "scanner" },
+	SubagentStart: { dir: SCV, pool: "tscrdy" },
+	SubagentStop: { dir: SCV, pool: "tadupd", errorPool: "tscpss" },
+	Stop: { dir: ADVISOR, pool: "complete", errorPool: "need" },
+	TeammateIdle: { dir: SCV, pool: "tscpss" },
+	TaskCompleted: { dir: ADVISOR, pool: "tadupd" },
+	WorktreeCreate: { dir: MISC, pool: "liftoff" },
+	WorktreeRemove: { dir: MISC, pool: "land" },
+	PreCompact: { dir: MISC, pool: "getin" },
+	SessionEnd: { dir: ADVISOR, pool: "complete", errorPool: "landing" },
+};
 
 async function main(event: string): Promise<void> {
+	if (await isMuted()) return;
 	const input = await readStdin();
 	await route(event, input);
+}
+
+export async function isMuted(): Promise<boolean> {
+	const home = process.env.HOME ?? homedir();
+	return Bun.file(`${home}/.claude/sound-muted`).exists();
 }
 
 export async function route(event: string, input: HookInput): Promise<void> {
@@ -125,12 +132,6 @@ async function resolvePool(
 	return (await hasErrors(transcriptPath)) ? spec.errorPool : spec.pool;
 }
 
-function play(dir: string, pool: string): void {
-	const files = poolFor(dir, pool);
-	if (files.length === 0) return;
-	playSound(randomFrom(files));
-}
-
 async function hasErrors(transcriptPath?: string): Promise<boolean> {
 	if (!transcriptPath) return false;
 	try {
@@ -151,9 +152,10 @@ export function parseTranscriptErrors(content: string): boolean {
 
 function findLastUserLineIndex(lines: string[]): number {
 	for (let i = lines.length - 1; i >= 0; i--) {
+		const line = lines[i];
 		if (
-			lines[i].includes('"role":"user"') ||
-			lines[i].includes('"role": "user"')
+			line !== undefined &&
+			(line.includes('"role":"user"') || line.includes('"role": "user"'))
 		)
 			return i;
 	}
@@ -174,19 +176,10 @@ function isToolError(e: unknown): boolean {
 	return entry.tool_result?.is_error === true;
 }
 
-export function findLastUserIndex(entries: unknown[]): number {
-	for (let i = entries.length - 1; i >= 0; i--) {
-		if (isUserEntry(entries[i])) return i;
-	}
-	return -1;
-}
-
-function isUserEntry(e: unknown): boolean {
-	return (
-		typeof e === "object" &&
-		e !== null &&
-		(e as Record<string, unknown>).role === "user"
-	);
+function play(dir: string, pool: string): void {
+	const files = poolFor(dir, pool);
+	if (files.length === 0) return;
+	playSound(randomFrom(files));
 }
 
 function playSound(path: string): void {
@@ -216,7 +209,22 @@ function poolFor(dir: string, prefix: string): string[] {
 }
 
 function randomFrom(files: string[]): string {
-	return files[Math.floor(Math.random() * files.length)];
+	return files[Math.floor(Math.random() * files.length)] ?? "";
+}
+
+export function findLastUserIndex(entries: unknown[]): number {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		if (isUserEntry(entries[i])) return i;
+	}
+	return -1;
+}
+
+function isUserEntry(e: unknown): boolean {
+	return (
+		typeof e === "object" &&
+		e !== null &&
+		(e as Record<string, unknown>).role === "user"
+	);
 }
 
 function lockfilePath(sessionId: string): string {
@@ -238,7 +246,7 @@ async function deleteLockfile(path: string): Promise<void> {
 }
 
 async function readStdin(): Promise<HookInput> {
-	const raw = (await stdin.text()).trim();
+	const raw = (await Bun.stdin.text()).trim();
 	if (!raw) return {};
 	try {
 		return JSON.parse(raw);
@@ -249,7 +257,10 @@ async function readStdin(): Promise<HookInput> {
 
 async function log(event: string, pool: string): Promise<void> {
 	try {
-		await appendFile(LOG_FILE, `${new Date().toISOString()} ${event} ${pool}\n`);
+		await appendFile(
+			LOG_FILE,
+			`${new Date().toISOString()} ${event} ${pool}\n`,
+		);
 	} catch {
 		// non-fatal: logging must never crash the hook
 	}
