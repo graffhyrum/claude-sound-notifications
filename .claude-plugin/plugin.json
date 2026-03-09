@@ -1,6 +1,7 @@
 {
-  "name": "sound-notifications",
-  "description": "Audible lifecycle feedback for Claude Code — routes session events to audio pools (Advisor for main agent, SCV for subagents).",
-  "version": "1.0.0",
-  "author": { "name": "Josh Pendragon", "email": "pendragon.josh@gmail.com" }
+	"name": "sound-notifications",
+	"description": "Audible lifecycle feedback for Claude Code — routes session events to audio pools (Advisor for main agent, SCV for subagents).",
+	"version": "1.0.0",
+	"author": { "name": "Josh Pendragon", "email": "pendragon.josh@gmail.com" },
+	"license": "UNLICENSE"
 }

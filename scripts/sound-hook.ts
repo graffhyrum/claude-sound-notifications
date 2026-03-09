@@ -1,10 +1,18 @@
 // Sound notification hook for Claude Code lifecycle events
 // Edit EVENT_SOUNDS to add, remove, or remap audio pools per event
 
+import { type } from "arktype";
 import { mkdirSync, readdirSync } from "node:fs";
 import { appendFile, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
+const parseHookInput = type("string.json.parse").to({
+	"session_id?": "string",
+	"transcript_path?": "string",
+	"tool_result?": { "is_error?": "boolean" },
+	"hook_event_name?": "string",
+});
 
 const PLUGIN_ROOT =
 	process.env.CLAUDE_PLUGIN_ROOT ?? join(import.meta.dir, "..");
@@ -42,12 +50,7 @@ type SoundSpec = {
 	lockfile?: "write" | "consume";
 };
 
-type HookInput = {
-	session_id?: string;
-	transcript_path?: string;
-	tool_result?: { is_error?: boolean };
-	hook_event_name?: string;
-};
+type HookInput = typeof parseHookInput.infer;
 
 const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
 	SessionStart: { dir: ADVISOR, pool: "adjutant_online" },
@@ -64,7 +67,7 @@ const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
 	WorktreeCreate: { dir: MISC, pool: "liftoff" },
 	WorktreeRemove: { dir: MISC, pool: "land" },
 	PreCompact: { dir: MISC, pool: "getin" },
-	SessionEnd: { dir: ADVISOR, pool: "complete", errorPool: "landing" },
+	SessionEnd: { dir: ADVISOR, pool: "nuke_detected", errorPool: "landing" },
 };
 
 async function main(event: string): Promise<void> {
@@ -246,14 +249,9 @@ async function deleteLockfile(path: string): Promise<void> {
 async function readStdin(): Promise<HookInput> {
 	const raw = (await Bun.stdin.text()).trim();
 	if (!raw) return {};
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
-			return {};
-		return parsed as HookInput;
-	} catch {
-		return {};
-	}
+	const result = parseHookInput(raw);
+	if (result instanceof type.errors) return {};
+	return result;
 }
 
 async function log(event: string, pool: string): Promise<void> {

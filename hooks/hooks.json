@@ -1,169 +1,169 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SessionStart"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts UserPromptSubmit"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PreToolUse"
-          }
-        ]
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PermissionRequest"
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PostToolUseFailure"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts Notification"
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SubagentStart"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SubagentStop"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts Stop"
-          }
-        ]
-      }
-    ],
-    "TeammateIdle": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts TeammateIdle"
-          }
-        ]
-      }
-    ],
-    "TaskCompleted": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts TaskCompleted"
-          }
-        ]
-      }
-    ],
-    "WorktreeCreate": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeCreate"
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeRemove"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PreCompact"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SessionEnd"
-          }
-        ]
-      }
-    ]
-  }
+	"hooks": {
+		"SessionStart": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SessionStart"
+					}
+				]
+			}
+		],
+		"UserPromptSubmit": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts UserPromptSubmit"
+					}
+				]
+			}
+		],
+		"PreToolUse": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PreToolUse"
+					}
+				]
+			}
+		],
+		"PermissionRequest": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PermissionRequest"
+					}
+				]
+			}
+		],
+		"PostToolUseFailure": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PostToolUseFailure"
+					}
+				]
+			}
+		],
+		"Notification": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts Notification"
+					}
+				]
+			}
+		],
+		"SubagentStart": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SubagentStart"
+					}
+				]
+			}
+		],
+		"SubagentStop": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SubagentStop"
+					}
+				]
+			}
+		],
+		"Stop": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts Stop"
+					}
+				]
+			}
+		],
+		"TeammateIdle": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts TeammateIdle"
+					}
+				]
+			}
+		],
+		"TaskCompleted": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts TaskCompleted"
+					}
+				]
+			}
+		],
+		"WorktreeCreate": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeCreate"
+					}
+				]
+			}
+		],
+		"WorktreeRemove": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeRemove"
+					}
+				]
+			}
+		],
+		"PreCompact": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts PreCompact"
+					}
+				]
+			}
+		],
+		"SessionEnd": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts SessionEnd"
+					}
+				]
+			}
+		]
+	}
 }
