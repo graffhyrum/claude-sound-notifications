@@ -3,7 +3,7 @@
 
 import { type } from "arktype";
 import { mkdirSync, readdirSync } from "node:fs";
-import { appendFile, unlink } from "node:fs/promises";
+import { appendFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -22,6 +22,8 @@ const MISC = join(PLUGIN_ROOT, "sounds", "misc");
 const LOCKFILE_TTL_MS = 60_000;
 const LOG_DIR = join(process.env.HOME ?? homedir(), ".claude", "logs");
 const LOG_FILE = join(LOG_DIR, "sound-hook.log");
+const LOG_MAX_BYTES = 1_048_576; // 1 MB
+const LOG_KEEP_LINES = 1_000;
 
 export type ClaudeEvent =
 	| "SessionStart"
@@ -256,6 +258,7 @@ async function readStdin(): Promise<HookInput> {
 
 async function log(event: string, pool: string): Promise<void> {
 	try {
+		await rotateIfNeeded();
 		await appendFile(
 			LOG_FILE,
 			`${new Date().toISOString()} ${event} ${pool}\n`,
@@ -263,6 +266,19 @@ async function log(event: string, pool: string): Promise<void> {
 	} catch {
 		// non-fatal: logging must never crash the hook
 	}
+}
+
+async function rotateIfNeeded(): Promise<void> {
+	const info = await stat(LOG_FILE).catch(() => null);
+	if (!info || info.size < LOG_MAX_BYTES) return;
+	await truncateToLastN(LOG_FILE, LOG_KEEP_LINES);
+}
+
+async function truncateToLastN(path: string, n: number): Promise<void> {
+	const text = await Bun.file(path).text();
+	const lines = text.split("\n").filter(Boolean);
+	const kept = lines.slice(-n).join("\n") + "\n";
+	await writeFile(path, kept, "utf8");
 }
 
 if (import.meta.main) {
