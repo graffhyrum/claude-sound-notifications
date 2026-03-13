@@ -121,28 +121,6 @@
 				]
 			}
 		],
-		"WorktreeCreate": [
-			{
-				"matcher": "",
-				"hooks": [
-					{
-						"type": "command",
-						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeCreate"
-					}
-				]
-			}
-		],
-		"WorktreeRemove": [
-			{
-				"matcher": "",
-				"hooks": [
-					{
-						"type": "command",
-						"command": "bun run ${CLAUDE_PLUGIN_ROOT}/scripts/sound-hook.ts WorktreeRemove"
-					}
-				]
-			}
-		],
 		"PreCompact": [
 			{
 				"matcher": "",
