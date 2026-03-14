@@ -13,11 +13,18 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
+	detectPlayer,
 	findLastUserIndex,
+	isClaudeEvent,
 	isMuted,
+	lockfilePath,
 	lockfileValidAndFresh,
 	parseTranscriptErrors,
+	playSound,
+	poolFor,
+	randomFrom,
 	route,
+	truncateToLastN,
 } from "./sound-hook.ts";
 
 describe("parseTranscriptErrors", () => {
@@ -270,6 +277,87 @@ describe("route", () => {
 				await unlink(join(tmpHome, ".claude", "sound-muted")).catch(() => undefined);
 			}
 		});
+	});
+});
+
+describe("detectPlayer", () => {
+	it("returns a string or null", () => {
+		const result = detectPlayer();
+		if (result !== null) {
+			expect(typeof result).toBe("string");
+			expect(["pw-play", "aplay"]).toContain(result);
+		} else {
+			expect(result).toBeNull();
+		}
+	});
+});
+
+describe("poolFor", () => {
+	it("returns empty array for nonexistent directory", () => {
+		expect(poolFor("/tmp/no-such-dir-sound-hook-xyz", "foo")).toEqual([]);
+	});
+
+	it("returns filtered files for existing directory", () => {
+		const tmp = mkdtempSync("/tmp/sound-hook-pool-test-");
+		try {
+			Bun.spawnSync(["touch", join(tmp, "beep1.wav"), join(tmp, "beep2.wav"), join(tmp, "boop.wav")]);
+			const result = poolFor(tmp, "beep");
+			expect(result).toHaveLength(2);
+			expect(result.every((f) => f.includes("beep"))).toBe(true);
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("randomFrom", () => {
+	it("returns empty string for empty array", () => {
+		expect(randomFrom([])).toBe("");
+	});
+
+	it("returns one of the elements for non-empty array", () => {
+		const items = ["a", "b", "c"];
+		expect(items).toContain(randomFrom(items));
+	});
+});
+
+describe("isClaudeEvent", () => {
+	it("returns true for SessionStart", () => {
+		expect(isClaudeEvent("SessionStart")).toBe(true);
+	});
+
+	it("returns false for UnknownEvent", () => {
+		expect(isClaudeEvent("UnknownEvent")).toBe(false);
+	});
+});
+
+describe("lockfilePath", () => {
+	it("returns /tmp/claude-sound-<sessionId>", () => {
+		expect(lockfilePath("abc-123")).toBe("/tmp/claude-sound-abc-123");
+	});
+});
+
+describe("truncateToLastN", () => {
+	it("truncates a file to the last N lines", async () => {
+		const tmp = join("/tmp", `truncate-test-${process.pid}`);
+		const content = Array.from({ length: 100 }, (_, i) => `line-${i}`).join("\n") + "\n";
+		await writeFile(tmp, content, "utf8");
+		try {
+			await truncateToLastN(tmp, 10);
+			const result = await Bun.file(tmp).text();
+			const remaining = result.split("\n").filter(Boolean);
+			expect(remaining).toHaveLength(10);
+			expect(remaining[0]).toBe("line-90");
+			expect(remaining[9]).toBe("line-99");
+		} finally {
+			await unlink(tmp).catch(() => undefined);
+		}
+	});
+});
+
+describe("playSound", () => {
+	it("with player null does not throw", () => {
+		expect(() => playSound("/tmp/nonexistent.wav", null)).not.toThrow();
 	});
 });
 

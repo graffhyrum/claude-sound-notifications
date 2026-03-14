@@ -46,16 +46,7 @@ const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
     PreCompact: { dir: MISC, pool: "getin" },
     SessionEnd: { dir: ADVISOR, pool: "nuke_detected", errorPool: "landing" },
 };
-if (import.meta.main) {
-    mkdirSync(LOG_DIR, { recursive: true });
-    const event = process.argv[2];
-    if (!event) {
-        console.error("Usage: sound-hook.ts <ClaudeEventName>");
-        process.exit(1);
-    }
-    await main(event);
-}
-async function main(event: string): Promise<void> {
+export async function run(event: string): Promise<void> {
     if (await isMuted())
         return;
     const input = await readStdin();
@@ -149,7 +140,7 @@ export async function isMuted(): Promise<boolean> {
     const home = process.env.HOME ?? homedir();
     return Bun.file(`${home}/.claude/sound-muted`).exists();
 }
-function isClaudeEvent(s: string): s is ClaudeEvent {
+export function isClaudeEvent(s: string): s is ClaudeEvent {
     return s in EVENT_SOUNDS;
 }
 function tryParseJson(line: string): unknown[] {
@@ -170,7 +161,7 @@ function isToolError(e: unknown): boolean {
     };
     return entry.tool_result?.is_error === true;
 }
-function playSound(path: string, player: string | null): void {
+export function playSound(path: string, player: string | null): void {
     if (!player)
         return;
     const proc = Bun.spawn([player, path], {
@@ -179,14 +170,14 @@ function playSound(path: string, player: string | null): void {
     });
     proc.unref();
 }
-function detectPlayer(): string | null {
+export function detectPlayer(): string | null {
     for (const cmd of ["pw-play", "aplay"]) {
         if (Bun.which(cmd))
             return cmd;
     }
     return null;
 }
-function poolFor(dir: string, prefix: string): string[] {
+export function poolFor(dir: string, prefix: string): string[] {
     try {
         return readdirSync(dir)
             .filter((f) => f.startsWith(prefix))
@@ -196,7 +187,7 @@ function poolFor(dir: string, prefix: string): string[] {
         return [];
     }
 }
-function randomFrom(files: string[]): string {
+export function randomFrom(files: string[]): string {
     return files[Math.floor(Math.random() * files.length)] ?? "";
 }
 function isUserEntry(e: unknown): boolean {
@@ -204,7 +195,7 @@ function isUserEntry(e: unknown): boolean {
         e !== null &&
         (e as Record<string, unknown>).role === "user");
 }
-function lockfilePath(sessionId: string): string {
+export function lockfilePath(sessionId: string): string {
     return `/tmp/claude-sound-${sessionId}`;
 }
 export async function lockfileValidAndFresh(path: string): Promise<boolean> {
@@ -221,7 +212,7 @@ async function deleteLockfile(path: string): Promise<void> {
         // already gone
     }
 }
-async function readStdin(): Promise<HookInput> {
+export async function readStdin(): Promise<HookInput> {
     const raw = (await Bun.stdin.text()).trim();
     if (!raw)
         return {};
@@ -230,9 +221,18 @@ async function readStdin(): Promise<HookInput> {
         return {};
     return result;
 }
-async function truncateToLastN(path: string, n: number): Promise<void> {
+export async function truncateToLastN(path: string, n: number): Promise<void> {
     const text = await Bun.file(path).text();
     const lines = text.split("\n").filter(Boolean);
     const kept = `${lines.slice(-n).join("\n")}\n`;
     await writeFile(path, kept, "utf8");
+}
+if (import.meta.main) {
+    mkdirSync(LOG_DIR, { recursive: true });
+    const event = process.argv[2];
+    if (!event) {
+        console.error("Usage: sound-hook.ts <ClaudeEventName>");
+        process.exit(1);
+    }
+    await run(event);
 }
