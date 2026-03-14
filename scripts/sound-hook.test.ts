@@ -1,15 +1,23 @@
 // Tests for sound-hook.ts — covers transcript error detection and turn-index logic
 // These are the highest-risk paths: wrong result here plays wrong sound silently
 
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+} from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
 	findLastUserIndex,
 	isMuted,
 	lockfileValidAndFresh,
 	parseTranscriptErrors,
+	route,
 } from "./sound-hook.ts";
 
 describe("parseTranscriptErrors", () => {
@@ -137,6 +145,131 @@ describe("isMuted", () => {
 		} finally {
 			await unlink(sentinel);
 		}
+	});
+});
+
+describe("route", () => {
+	// Use process.pid + a counter to avoid collisions between test cases.
+	const pid = process.pid;
+
+	it("unknown event → no-op (resolves without throwing)", async () => {
+		await expect(route("UnknownEvent", {}, null)).resolves.toBeUndefined();
+	});
+
+	it("event with no spec entry → no-op (resolves without throwing)", async () => {
+		// PostToolUse is a valid ClaudeEvent but has no EVENT_SOUNDS entry.
+		await expect(route("PostToolUse", {}, null)).resolves.toBeUndefined();
+	});
+
+	describe("lockfile write (UserPromptSubmit)", () => {
+		const sessionId = `test-route-${pid}-write`;
+		const lockfile = `/tmp/claude-sound-${sessionId}`;
+
+		afterEach(async () => {
+			await unlink(lockfile).catch(() => undefined);
+		});
+
+		it("writes lockfile when lockfile mode is 'write'", async () => {
+			await route("UserPromptSubmit", { session_id: sessionId }, null);
+			expect(await Bun.file(lockfile).exists()).toBe(true);
+		});
+	});
+
+	describe("lockfile consume without prior write → gate blocks", () => {
+		const sessionId = `test-nolock-${pid}`;
+		const lockfile = `/tmp/claude-sound-${sessionId}`;
+
+		afterEach(async () => {
+			await unlink(lockfile).catch(() => undefined);
+		});
+
+		it("resolves without error when no lockfile present", async () => {
+			await expect(
+				route("PreToolUse", { session_id: sessionId }, null),
+			).resolves.toBeUndefined();
+			// Gate blocked play — lockfile should still not exist.
+			expect(await Bun.file(lockfile).exists()).toBe(false);
+		});
+	});
+
+	describe("lockfile consume after write → gate passes and deletes lockfile", () => {
+		const sessionId = `test-consume-${pid}`;
+		const lockfile = `/tmp/claude-sound-${sessionId}`;
+
+		afterEach(async () => {
+			await unlink(lockfile).catch(() => undefined);
+		});
+
+		it("writes then consumes lockfile", async () => {
+			await route("UserPromptSubmit", { session_id: sessionId }, null);
+			expect(await Bun.file(lockfile).exists()).toBe(true);
+
+			await route("PreToolUse", { session_id: sessionId }, null);
+			expect(await Bun.file(lockfile).exists()).toBe(false);
+		});
+	});
+
+	describe("errorPool selection (Stop event)", () => {
+		let tmpTranscript: string;
+
+		afterEach(async () => {
+			if (tmpTranscript) {
+				await unlink(tmpTranscript).catch(() => undefined);
+			}
+		});
+
+		it("resolves with transcript containing tool error", async () => {
+			tmpTranscript = `/tmp/sound-hook-transcript-${pid}.jsonl`;
+			const content =
+				JSON.stringify({ role: "user" }) +
+				"\n" +
+				JSON.stringify({ tool_result: { is_error: true } });
+			await writeFile(tmpTranscript, content, "utf8");
+
+			await expect(
+				route("Stop", { session_id: `s1-${pid}`, transcript_path: tmpTranscript }, null),
+			).resolves.toBeUndefined();
+		});
+
+		it("resolves without transcript (normal pool)", async () => {
+			await expect(
+				route("Stop", { session_id: `s2-${pid}` }, null),
+			).resolves.toBeUndefined();
+		});
+	});
+
+	describe("isMuted check via route", () => {
+		let tmpHome: string;
+		let originalHome: string | undefined;
+
+		beforeAll(() => {
+			originalHome = process.env.HOME;
+			tmpHome = mkdtempSync("/tmp/sound-hook-muted-home-");
+			mkdirSync(join(tmpHome, ".claude"));
+		});
+
+		afterAll(() => {
+			if (originalHome !== undefined) {
+				process.env.HOME = originalHome;
+			} else {
+				delete process.env.HOME;
+			}
+			rmSync(tmpHome, { recursive: true, force: true });
+		});
+
+		it("route bypasses mute check (mute is checked in main, not route)", async () => {
+			// route() itself does not check isMuted — that's done by main().
+			// This test confirms route resolves even when the sentinel file is present.
+			process.env.HOME = tmpHome;
+			await Bun.write(join(tmpHome, ".claude", "sound-muted"), "");
+			try {
+				await expect(
+					route("SessionStart", {}, null),
+				).resolves.toBeUndefined();
+			} finally {
+				await unlink(join(tmpHome, ".claude", "sound-muted")).catch(() => undefined);
+			}
+		});
 	});
 });
 
