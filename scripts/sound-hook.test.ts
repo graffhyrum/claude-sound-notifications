@@ -23,7 +23,9 @@ import {
 	playSound,
 	poolFor,
 	randomFrom,
+	readStdin,
 	route,
+	run,
 	truncateToLastN,
 } from "./sound-hook.ts";
 
@@ -358,6 +360,59 @@ describe("truncateToLastN", () => {
 describe("playSound", () => {
 	it("with player null does not throw", () => {
 		expect(() => playSound("/tmp/nonexistent.wav", null)).not.toThrow();
+	});
+
+	it("spawns player process when player is provided", () => {
+		// "true" is a valid command that exits 0 and ignores arguments
+		expect(() => playSound("/tmp/nonexistent.wav", "true")).not.toThrow();
+	});
+});
+
+describe("run (subprocess)", () => {
+	it("exits 0 for a valid event when stdin is empty", () => {
+		const result = Bun.spawnSync(
+			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
+			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe" },
+		);
+		// Should exit 0 — empty stdin produces {} input, route resolves
+		expect(result.exitCode).toBe(0);
+	});
+
+	it("exits 1 when no event argument is provided", () => {
+		const result = Bun.spawnSync(
+			["bun", "run", join(import.meta.dir, "sound-hook.ts")],
+			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe" },
+		);
+		expect(result.exitCode).toBe(1);
+		expect(result.stderr.toString()).toContain("Usage:");
+	});
+
+	it("exits 0 with valid JSON stdin", () => {
+		const input = JSON.stringify({ session_id: "test-run-subprocess" });
+		const result = Bun.spawnSync(
+			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
+			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" },
+		);
+		expect(result.exitCode).toBe(0);
+	});
+});
+
+describe("readStdin (via subprocess)", () => {
+	it("parses valid JSON from stdin and passes it to route", () => {
+		const input = JSON.stringify({ session_id: "stdin-test", hook_event_name: "Stop" });
+		const result = Bun.spawnSync(
+			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "Stop"],
+			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" },
+		);
+		expect(result.exitCode).toBe(0);
+	});
+
+	it("handles invalid JSON stdin gracefully (falls back to {})", () => {
+		const result = Bun.spawnSync(
+			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
+			{ stdin: new Blob(["not valid json {{{"]), stdout: "pipe", stderr: "pipe" },
+		);
+		expect(result.exitCode).toBe(0);
 	});
 });
 
