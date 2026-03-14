@@ -227,6 +227,7 @@ export async function truncateToLastN(path: string, n: number): Promise<void> {
     const kept = `${lines.slice(-n).join("\n")}\n`;
     await writeFile(path, kept, "utf8");
 }
+/* v8 ignore next 9 */
 if (import.meta.main) {
     mkdirSync(LOG_DIR, { recursive: true });
     const event = process.argv[2];
