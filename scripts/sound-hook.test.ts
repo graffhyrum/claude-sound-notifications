@@ -9,7 +9,7 @@ import {
 	expect,
 	it,
 } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -245,6 +245,19 @@ describe("route", () => {
 				route("Stop", { session_id: `s2-${pid}` }, null),
 			).resolves.toBeUndefined();
 		});
+
+		it("falls back to normal pool when transcript file is unreadable", async () => {
+			tmpTranscript = `/tmp/sound-hook-transcript-unreadable-${pid}.jsonl`;
+			await writeFile(tmpTranscript, "should not be readable", "utf8");
+			chmodSync(tmpTranscript, 0o000);
+
+			await expect(
+				route("Stop", { session_id: `s3-${pid}`, transcript_path: tmpTranscript }, null),
+			).resolves.toBeUndefined();
+
+			// Restore permissions so afterEach cleanup can delete
+			chmodSync(tmpTranscript, 0o644);
+		});
 	});
 
 	describe("isMuted check via route", () => {
@@ -354,6 +367,47 @@ describe("truncateToLastN", () => {
 		} finally {
 			await unlink(tmp).catch(() => undefined);
 		}
+	});
+});
+
+describe("log rotation via route", () => {
+	// LOG_FILE is computed at import time from process.env.HOME, so we use the
+	// real path: ~/.claude/logs/sound-hook.log. Save and restore any existing content.
+	const logDir = join(process.env.HOME ?? "", ".claude", "logs");
+	const logFile = join(logDir, "sound-hook.log");
+	let savedContent: string | null = null;
+
+	beforeAll(async () => {
+		mkdirSync(logDir, { recursive: true });
+		const file = Bun.file(logFile);
+		if (await file.exists()) {
+			savedContent = await file.text();
+		}
+	});
+
+	afterAll(async () => {
+		if (savedContent !== null) {
+			await writeFile(logFile, savedContent, "utf8");
+		} else {
+			await unlink(logFile).catch(() => undefined);
+		}
+	});
+
+	it("truncates log file when it exceeds 1MB", async () => {
+		// Create a log file larger than 1MB (LOG_MAX_BYTES = 1048576)
+		const bigLine = "X".repeat(200);
+		const lineCount = 6000; // 6000 * ~220 bytes > 1MB
+		const content = Array.from({ length: lineCount }, (_, i) => `2026-01-01T00:00:00Z event-${i} ${bigLine}`).join("\n") + "\n";
+		await writeFile(logFile, content, "utf8");
+
+		const sizeBefore = statSync(logFile).size;
+		expect(sizeBefore).toBeGreaterThan(1048576);
+
+		// route() triggers playWithLogging → log → rotateIfNeeded → truncateToLastN
+		await route("SessionStart", {}, null);
+
+		const sizeAfter = statSync(logFile).size;
+		expect(sizeAfter).toBeLessThan(sizeBefore);
 	});
 });
 
