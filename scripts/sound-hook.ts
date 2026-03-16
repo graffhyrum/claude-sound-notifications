@@ -46,11 +46,16 @@ const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
     PreCompact: { dir: MISC, pool: "getin" },
     SessionEnd: { dir: ADVISOR, pool: "nuke_detected", errorPool: "landing" },
 };
-export async function run(event: string): Promise<void> {
-    if (await isMuted())
+export async function run(
+    event: string,
+    readInput: () => Promise<HookInput> = readStdin,
+    checkMuted: () => Promise<boolean> = isMuted,
+    player: string | null = detectPlayer(),
+): Promise<void> {
+    if (await checkMuted())
         return;
-    const input = await readStdin();
-    await route(event, input, detectPlayer());
+    const input = await readInput();
+    await route(event, input, player);
 }
 export async function route(event: string, input: HookInput, player: string | null = detectPlayer()): Promise<void> {
     if (!isClaudeEvent(event))

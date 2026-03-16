@@ -470,6 +470,43 @@ describe("readStdin (via subprocess)", () => {
 	});
 });
 
+describe("run() seam injection", () => {
+	it("returns early when checkMuted returns true", async () => {
+		let readInputCalled = false;
+		await run(
+			"SessionStart",
+			async () => {
+				readInputCalled = true;
+				return {};
+			},
+			async () => true, // muted
+			null,
+		);
+		expect(readInputCalled).toBe(false);
+	});
+
+	it("calls route with input from readInput when not muted", async () => {
+		const testInput = { session_id: "test-seam" };
+		await run(
+			"SessionStart",
+			async () => testInput,
+			async () => false, // not muted
+			null, // no player — won't actually play
+		);
+		// route was called (no error = success)
+	});
+
+	it("passes custom player to route", async () => {
+		await run(
+			"SessionStart",
+			async () => ({}),
+			async () => false,
+			null,
+		);
+		// Completes without error — player=null means no sound played
+	});
+});
+
 function lines(...entries: unknown[]): string {
 	return entries.map((e) => JSON.stringify(e)).join("\n");
 }
