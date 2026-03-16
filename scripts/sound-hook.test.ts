@@ -131,14 +131,21 @@ describe("lockfileValidAndFresh", () => {
 
 describe("isMuted", () => {
 	let tmpHome: string;
+	let originalHome: string | undefined;
 
 	beforeAll(() => {
+		originalHome = process.env.HOME;
 		tmpHome = mkdtempSync("/tmp/sound-hook-test-home-");
 		mkdirSync(join(tmpHome, ".claude"));
 		process.env.HOME = tmpHome;
 	});
 
 	afterAll(() => {
+		if (originalHome !== undefined) {
+			process.env.HOME = originalHome;
+		} else {
+			delete process.env.HOME;
+		}
 		rmSync(tmpHome, { recursive: true, force: true });
 	});
 
@@ -172,7 +179,7 @@ describe("route", () => {
 
 	describe("lockfile write (UserPromptSubmit)", () => {
 		const sessionId = `test-route-${pid}-write`;
-		const lockfile = `/tmp/claude-sound-${sessionId}`;
+		const lockfile = lockfilePath(sessionId);
 
 		afterEach(async () => {
 			await unlink(lockfile).catch(() => undefined);
@@ -186,7 +193,7 @@ describe("route", () => {
 
 	describe("lockfile consume without prior write → gate blocks", () => {
 		const sessionId = `test-nolock-${pid}`;
-		const lockfile = `/tmp/claude-sound-${sessionId}`;
+		const lockfile = lockfilePath(sessionId);
 
 		afterEach(async () => {
 			await unlink(lockfile).catch(() => undefined);
@@ -203,7 +210,7 @@ describe("route", () => {
 
 	describe("lockfile consume after write → gate passes and deletes lockfile", () => {
 		const sessionId = `test-consume-${pid}`;
-		const lockfile = `/tmp/claude-sound-${sessionId}`;
+		const lockfile = lockfilePath(sessionId);
 
 		afterEach(async () => {
 			await unlink(lockfile).catch(() => undefined);
@@ -347,8 +354,9 @@ describe("isClaudeEvent", () => {
 });
 
 describe("lockfilePath", () => {
-	it("returns /tmp/claude-sound-<sessionId>", () => {
-		expect(lockfilePath("abc-123")).toBe("/tmp/claude-sound-abc-123");
+	it("returns a path under ~/.claude/tmp/ with session ID", () => {
+		const result = lockfilePath("abc-123");
+		expect(result).toContain(".claude/tmp/claude-sound-abc-123");
 	});
 });
 

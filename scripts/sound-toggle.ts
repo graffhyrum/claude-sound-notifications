@@ -24,7 +24,12 @@ async function mute(): Promise<void> {
 const UNMUTE_EVENT: ClaudeEvent = "SessionStart";
 
 async function unmute(): Promise<void> {
-	await unlink(sentinel);
+	try {
+		await unlink(sentinel);
+	} catch (err: unknown) {
+		// TOCTOU: file may have been removed between isMuted() and unlink()
+		if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) throw err;
+	}
 	console.log("Sound notifications: UNMUTED");
 	await route(UNMUTE_EVENT, { session_id: "toggle" });
 }

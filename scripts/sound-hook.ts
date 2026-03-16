@@ -130,6 +130,10 @@ async function passesTurnGate(lockfile: SoundSpec["lockfile"], sessionId: string
         return true;
     return consumeLockfile(sessionId);
 }
+// TOCTOU race: another process could consume the lockfile between the freshness
+// check and the delete. Impact is limited to a duplicate sound play, which is
+// acceptable. An atomic rename-based protocol would eliminate the race but adds
+// complexity disproportionate to the risk.
 async function consumeLockfile(sessionId: string): Promise<boolean> {
     const path = lockfilePath(sessionId);
     if (!(await lockfileValidAndFresh(path)))
@@ -201,7 +205,9 @@ function isUserEntry(e: unknown): boolean {
         (e as Record<string, unknown>).role === "user");
 }
 export function lockfilePath(sessionId: string): string {
-    return `/tmp/claude-sound-${sessionId}`;
+    const dir = join(process.env.HOME ?? homedir(), ".claude", "tmp");
+    mkdirSync(dir, { recursive: true });
+    return join(dir, `claude-sound-${sessionId}`);
 }
 export async function lockfileValidAndFresh(path: string): Promise<boolean> {
     const file = Bun.file(path);
