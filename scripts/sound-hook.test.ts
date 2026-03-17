@@ -26,7 +26,11 @@ import {
 	readStdin,
 	route,
 	run,
+	themeFor,
 	truncateToLastN,
+	THEMES,
+	type ClaudeEvent,
+	type ThemeName,
 } from "./sound-hook.ts";
 
 describe("parseTranscriptErrors", () => {
@@ -172,8 +176,9 @@ describe("route", () => {
 		await expect(route("UnknownEvent", {}, null)).resolves.toBeUndefined();
 	});
 
-	it("event with no spec entry → no-op (resolves without throwing)", async () => {
-		// PostToolUse is a valid ClaudeEvent but has no EVENT_SOUNDS entry.
+	it("event with no theme spec entry → no-op (resolves without throwing)", async () => {
+		// PostToolUse is a valid ClaudeEvent (isClaudeEvent passes, guard 1 passes)
+		// but has no entry in any theme map (guard 2 catches it via spec === undefined).
 		await expect(route("PostToolUse", {}, null)).resolves.toBeUndefined();
 	});
 
@@ -344,13 +349,83 @@ describe("randomFrom", () => {
 });
 
 describe("isClaudeEvent", () => {
-	it("returns true for SessionStart", () => {
-		expect(isClaudeEvent("SessionStart")).toBe(true);
+	const ALL_EVENTS: ClaudeEvent[] = [
+		"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+		"PostToolUse", "PostToolUseFailure", "Notification", "SubagentStart",
+		"SubagentStop", "Stop", "TeammateIdle", "TaskCompleted", "ConfigChange",
+		"WorktreeCreate", "WorktreeRemove", "PreCompact", "SessionEnd",
+	];
+
+	it("returns true for all 17 ClaudeEvent members", () => {
+		for (const event of ALL_EVENTS) {
+			expect(isClaudeEvent(event)).toBe(true);
+		}
 	});
 
 	it("returns false for UnknownEvent", () => {
 		expect(isClaudeEvent("UnknownEvent")).toBe(false);
 	});
+
+	it("returns false for empty string", () => {
+		expect(isClaudeEvent("")).toBe(false);
+	});
+
+	it("returns false for partial event name", () => {
+		expect(isClaudeEvent("Session")).toBe(false);
+	});
+});
+
+describe("themeFor", () => {
+	it("returns a valid ThemeName", () => {
+		const valid: ThemeName[] = ["terran", "zerg", "protoss"];
+		expect(valid).toContain(themeFor("some-session-id"));
+	});
+
+	it("is deterministic — same input always yields same output", () => {
+		const id = "deterministic-test-session";
+		expect(themeFor(id)).toBe(themeFor(id));
+	});
+
+	it("known session IDs map to pinned themes", () => {
+		// djb2 hash results — pinned to catch regressions
+		expect(themeFor("abc123")).toBe("terran");
+		expect(themeFor("session-0")).toBe("protoss");
+		expect(themeFor("session-42")).toBe("zerg");
+	});
+
+	it("unknown maps to a stable deterministic result", () => {
+		const result = themeFor("unknown");
+		expect(["terran", "zerg", "protoss"]).toContain(result);
+		expect(themeFor("unknown")).toBe(result);
+	});
+
+	it("distributes roughly evenly across 300 session IDs", () => {
+		const counts: Record<ThemeName, number> = { terran: 0, zerg: 0, protoss: 0 };
+		for (let i = 0; i < 300; i++) {
+			counts[themeFor(`session-${i}-${Math.random()}`)]++;
+		}
+		// Each theme should get 70–130 of 300 (within ±10% of 100)
+		for (const theme of ["terran", "zerg", "protoss"] as ThemeName[]) {
+			expect(counts[theme]).toBeGreaterThanOrEqual(70);
+			expect(counts[theme]).toBeLessThanOrEqual(130);
+		}
+	});
+});
+
+describe("THEMES shape", () => {
+	const REQUIRED_EVENTS: ClaudeEvent[] = [
+		"SessionStart", "UserPromptSubmit", "PreToolUse",
+		"SubagentStart", "SubagentStop", "Stop", "SessionEnd",
+	];
+
+	it.each(["terran", "zerg", "protoss"] as ThemeName[])(
+		"%s theme defines all required events",
+		(theme) => {
+			for (const event of REQUIRED_EVENTS) {
+				expect(THEMES[theme][event]).toBeDefined();
+			}
+		},
+	);
 });
 
 describe("lockfilePath", () => {
@@ -405,7 +480,7 @@ describe("log rotation via route", () => {
 		// Create a log file larger than 1MB (LOG_MAX_BYTES = 1048576)
 		const bigLine = "X".repeat(200);
 		const lineCount = 6000; // 6000 * ~220 bytes > 1MB
-		const content = Array.from({ length: lineCount }, (_, i) => `2026-01-01T00:00:00Z event-${i} ${bigLine}`).join("\n") + "\n";
+		const content = Array.from({ length: lineCount }, (_, i) => `2026-01-01T00:00:00Z [terran] event-${i} ${bigLine}`).join("\n") + "\n";
 		await writeFile(logFile, content, "utf8");
 
 		const sizeBefore = statSync(logFile).size;
@@ -416,6 +491,18 @@ describe("log rotation via route", () => {
 
 		const sizeAfter = statSync(logFile).size;
 		expect(sizeAfter).toBeLessThan(sizeBefore);
+	});
+
+	it("log line includes [theme] bracket prefix", async () => {
+		// Ensure log file exists and is small (not over rotation threshold)
+		await writeFile(logFile, "", "utf8");
+
+		// "unknown" session_id → deterministic theme
+		await route("SessionStart", { session_id: "unknown" }, null);
+
+		const content = await Bun.file(logFile).text();
+		// Line format: <ISO-timestamp> [<theme>] <event> → <pool>
+		expect(content).toMatch(/\[(?:terran|zerg|protoss)\]/);
 	});
 });
 
