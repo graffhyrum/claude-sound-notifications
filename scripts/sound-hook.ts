@@ -217,7 +217,9 @@ export function themeFor(sessionId: string): ThemeName {
     for (let i = 0; i < sessionId.length; i++) {
         h = (((h << 5) + h) ^ sessionId.charCodeAt(i)) >>> 0;
     }
-    return THEME_NAMES[h % THEME_NAMES.length]!;
+    const theme = THEME_NAMES[h % THEME_NAMES.length];
+    if (theme === undefined) throw new Error("THEME_NAMES is empty");
+    return theme;
 }
 function tryParseJson(line: string): unknown[] {
     try {
