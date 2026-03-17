@@ -1,5 +1,5 @@
 // Sound notification hook for Claude Code lifecycle events
-// Edit EVENT_SOUNDS to add, remove, or remap audio pools per event
+// Edit THEMES to add, remove, or remap audio pools per event and race
 import { type } from "arktype";
 import { mkdirSync, readdirSync } from "node:fs";
 import { appendFile, stat, unlink, writeFile } from "node:fs/promises";
@@ -12,15 +12,31 @@ const parseHookInput = type("string.json.parse").to({
     "hook_event_name?": "string",
 });
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ?? join(import.meta.dir, "..");
-const SCV = join(PLUGIN_ROOT, "sounds", "SCV");
-const ADVISOR = join(PLUGIN_ROOT, "sounds", "Advisor");
-const MISC = join(PLUGIN_ROOT, "sounds", "misc");
 const LOCKFILE_TTL_MS = 60000;
 const LOG_DIR = join(process.env.HOME ?? homedir(), ".claude", "logs");
 const LOG_FILE = join(LOG_DIR, "sound-hook.log");
 const LOG_MAX_BYTES = 1048576; // 1 MB
 const LOG_KEEP_LINES = 1000;
+// ── Terran paths ──────────────────────────────────────────────────────────────
+const TERRAN_ADVISOR = join(PLUGIN_ROOT, "sounds", "terran", "Advisor");
+const TERRAN_SCV = join(PLUGIN_ROOT, "sounds", "terran", "SCV");
+const TERRAN_MISC = join(PLUGIN_ROOT, "sounds", "terran", "misc");
+const TERRAN_MARINE = join(PLUGIN_ROOT, "sounds", "terran", "Marine");
+const TERRAN_GHOST = join(PLUGIN_ROOT, "sounds", "terran", "Ghost");
+const TERRAN_MEDIC = join(PLUGIN_ROOT, "sounds", "terran", "Medic");
+const TERRAN_BC = join(PLUGIN_ROOT, "sounds", "terran", "Battlecruiser");
+// ── Zerg paths ────────────────────────────────────────────────────────────────
+const ZERG_ADVISOR = join(PLUGIN_ROOT, "sounds", "zerg", "Advisor");
+const ZERG_DRONE = join(PLUGIN_ROOT, "sounds", "zerg", "Drone");
+const ZERG_HYDRALISK = join(PLUGIN_ROOT, "sounds", "zerg", "Hydralisk");
+const ZERG_ZERGLING = join(PLUGIN_ROOT, "sounds", "zerg", "Zergling");
+// ── Protoss paths ─────────────────────────────────────────────────────────────
+const PROTOSS_ADVISOR = join(PLUGIN_ROOT, "sounds", "protoss", "Advisor");
+const PROTOSS_PROBE = join(PLUGIN_ROOT, "sounds", "protoss", "Probe");
+const PROTOSS_ZEALOT = join(PLUGIN_ROOT, "sounds", "protoss", "Zealot");
+const PROTOSS_DT = join(PLUGIN_ROOT, "sounds", "protoss", "DarkTemplar");
 export type ClaudeEvent = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PermissionRequest" | "PostToolUse" | "PostToolUseFailure" | "Notification" | "SubagentStart" | "SubagentStop" | "Stop" | "TeammateIdle" | "TaskCompleted" | "ConfigChange" | "WorktreeCreate" | "WorktreeRemove" | "PreCompact" | "SessionEnd";
+export type ThemeName = "terran" | "zerg" | "protoss";
 type SoundSpec = {
     dir: string;
     pool: string;
@@ -28,23 +44,64 @@ type SoundSpec = {
     // "write" marks turn start; "consume" plays only once per turn, not per tool call
     lockfile?: "write" | "consume";
 };
+type ThemeSpec = Partial<Record<ClaudeEvent, SoundSpec>>;
 type HookInput = typeof parseHookInput.infer;
-const EVENT_SOUNDS: Partial<Record<ClaudeEvent, SoundSpec>> = {
-    SessionStart: { dir: ADVISOR, pool: "adjutant_online" },
-    UserPromptSubmit: { dir: SCV, pool: "tscyes", lockfile: "write" },
-    PreToolUse: { dir: SCV, pool: "tscyes", lockfile: "consume" },
-    PermissionRequest: { dir: SCV, pool: "tscpss" },
-    PostToolUseFailure: { dir: ADVISOR, pool: "need" },
-    Notification: { dir: MISC, pool: "scanner" },
-    SubagentStart: { dir: SCV, pool: "tscrdy" },
-    SubagentStop: { dir: SCV, pool: "tadupd", errorPool: "tscpss" },
-    Stop: { dir: ADVISOR, pool: "complete", errorPool: "need" },
-    TeammateIdle: { dir: SCV, pool: "tscpss" },
-    TaskCompleted: { dir: ADVISOR, pool: "tadupd" },
-    WorktreeCreate: { dir: MISC, pool: "liftoff" },
-    WorktreeRemove: { dir: MISC, pool: "land" },
-    PreCompact: { dir: MISC, pool: "getin" },
-    SessionEnd: { dir: ADVISOR, pool: "nuke_detected", errorPool: "landing" },
+const CLAUDE_EVENT_SET = new Set<string>([
+    "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+    "PostToolUse", "PostToolUseFailure", "Notification", "SubagentStart",
+    "SubagentStop", "Stop", "TeammateIdle", "TaskCompleted", "ConfigChange",
+    "WorktreeCreate", "WorktreeRemove", "PreCompact", "SessionEnd",
+] satisfies ClaudeEvent[]);
+export const THEMES: Record<ThemeName, ThemeSpec> = {
+    terran: {
+        SessionStart: { dir: TERRAN_ADVISOR, pool: "adjutant_online" },
+        UserPromptSubmit: { dir: TERRAN_SCV, pool: "tscyes", lockfile: "write" },
+        PreToolUse: { dir: TERRAN_MARINE, pool: "tmardy", lockfile: "consume" },
+        PermissionRequest: { dir: TERRAN_GHOST, pool: "tghpss" },
+        PostToolUseFailure: { dir: TERRAN_BC, pool: "tbapss" },
+        Notification: { dir: TERRAN_MISC, pool: "scanner" },
+        SubagentStart: { dir: TERRAN_GHOST, pool: "tghrdy" },
+        SubagentStop: { dir: TERRAN_MARINE, pool: "tmayes", errorPool: "tmapss" },
+        Stop: { dir: TERRAN_ADVISOR, pool: "complete", errorPool: "need" },
+        TeammateIdle: { dir: TERRAN_MARINE, pool: "tmapss" },
+        TaskCompleted: { dir: TERRAN_MEDIC, pool: "tmdyes" },
+        WorktreeCreate: { dir: TERRAN_MISC, pool: "liftoff" },
+        WorktreeRemove: { dir: TERRAN_MISC, pool: "land" },
+        PreCompact: { dir: TERRAN_MISC, pool: "getin" },
+        SessionEnd: { dir: TERRAN_ADVISOR, pool: "nuke_detected", errorPool: "landing" },
+    },
+    zerg: {
+        // Session lifecycle: Drone (no Advisor equivalents for these)
+        SessionStart: { dir: ZERG_DRONE, pool: "zdrrdy" },
+        UserPromptSubmit: { dir: ZERG_DRONE, pool: "zdryes", lockfile: "write" },
+        PreToolUse: { dir: ZERG_ZERGLING, pool: "zzerdy", lockfile: "consume" },
+        PermissionRequest: { dir: ZERG_HYDRALISK, pool: "zhypss" },
+        PostToolUseFailure: { dir: ZERG_ADVISOR, pool: "zaderr" },
+        Notification: { dir: ZERG_DRONE, pool: "zdrerr" },
+        SubagentStart: { dir: ZERG_ZERGLING, pool: "zzerdy" },
+        SubagentStop: { dir: ZERG_ZERGLING, pool: "zzeyes", errorPool: "zzepss" },
+        Stop: { dir: ZERG_HYDRALISK, pool: "zhyyes", errorPool: "zhypss" },
+        TeammateIdle: { dir: ZERG_DRONE, pool: "zdrpss" },
+        TaskCompleted: { dir: ZERG_ADVISOR, pool: "zadupd" },
+        PreCompact: { dir: ZERG_DRONE, pool: "zdrwht" },
+        SessionEnd: { dir: ZERG_DRONE, pool: "zdryes", errorPool: "zdrerr" },
+    },
+    protoss: {
+        // Session lifecycle: Probe (no Advisor equivalents for these)
+        SessionStart: { dir: PROTOSS_PROBE, pool: "pprrdy" },
+        UserPromptSubmit: { dir: PROTOSS_PROBE, pool: "ppryes", lockfile: "write" },
+        PreToolUse: { dir: PROTOSS_ZEALOT, pool: "pzerdy", lockfile: "consume" },
+        PermissionRequest: { dir: PROTOSS_DT, pool: "pdtpss" },
+        PostToolUseFailure: { dir: PROTOSS_ADVISOR, pool: "paderr" },
+        Notification: { dir: PROTOSS_PROBE, pool: "pprerr" },
+        SubagentStart: { dir: PROTOSS_ZEALOT, pool: "pzerdy" },
+        SubagentStop: { dir: PROTOSS_ZEALOT, pool: "pzeyes", errorPool: "pzepss" },
+        Stop: { dir: PROTOSS_DT, pool: "pdtyes", errorPool: "pdtpss" },
+        TeammateIdle: { dir: PROTOSS_PROBE, pool: "pprpss" },
+        TaskCompleted: { dir: PROTOSS_ADVISOR, pool: "padupd" },
+        PreCompact: { dir: PROTOSS_PROBE, pool: "pprwht" },
+        SessionEnd: { dir: PROTOSS_PROBE, pool: "ppryes", errorPool: "pprerr" },
+    },
 };
 export async function run(
     event: string,
@@ -60,27 +117,28 @@ export async function run(
 export async function route(event: string, input: HookInput, player: string | null = detectPlayer()): Promise<void> {
     if (!isClaudeEvent(event))
         return;
-    const spec = EVENT_SOUNDS[event];
+    const theme = themeFor(input.session_id ?? "unknown");
+    const spec = THEMES[theme][event];
     if (!spec)
         return;
-    await dispatch(spec, input, player);
+    await dispatch(spec, input, player, theme);
 }
-async function dispatch(spec: SoundSpec, input: HookInput, player: string | null): Promise<void> {
+async function dispatch(spec: SoundSpec, input: HookInput, player: string | null, theme: ThemeName): Promise<void> {
     const sessionId = input.session_id ?? "unknown";
     await writeLockfileIfNeeded(spec.lockfile, sessionId);
     if (!(await passesTurnGate(spec.lockfile, sessionId)))
         return;
-    await playWithLogging(spec, player, input.transcript_path, input.hook_event_name);
+    await playWithLogging(spec, player, input.transcript_path, input.hook_event_name, theme);
 }
-async function playWithLogging(spec: SoundSpec, player: string | null, transcriptPath?: string, eventName?: string): Promise<void> {
+async function playWithLogging(spec: SoundSpec, player: string | null, transcriptPath?: string, eventName?: string, theme?: ThemeName): Promise<void> {
     const pool = await resolvePool(spec, transcriptPath);
     play(spec.dir, pool, player);
-    await log(eventName ?? "unknown", pool);
+    await log(eventName ?? "unknown", pool, theme ?? "terran");
 }
-async function log(event: string, pool: string): Promise<void> {
+async function log(event: string, pool: string, theme: ThemeName): Promise<void> {
     try {
         await rotateIfNeeded();
-        await appendFile(LOG_FILE, `${new Date().toISOString()} ${event} ${pool}\n`);
+        await appendFile(LOG_FILE, `${new Date().toISOString()} [${theme}] ${event} → ${pool}\n`);
     }
     catch {
         // non-fatal: logging must never crash the hook
@@ -150,7 +208,18 @@ export async function isMuted(): Promise<boolean> {
     return Bun.file(`${home}/.claude/sound-muted`).exists();
 }
 export function isClaudeEvent(s: string): s is ClaudeEvent {
-    return s in EVENT_SOUNDS;
+    return CLAUDE_EVENT_SET.has(s);
+}
+// djb2 hash → unsigned 32-bit → mod 3 — pure, deterministic, no I/O
+export function themeFor(sessionId: string): ThemeName {
+    const names: ThemeName[] = ["terran", "zerg", "protoss"];
+    let h = 5381;
+    for (let i = 0; i < sessionId.length; i++) {
+        h = (((h << 5) + h) ^ sessionId.charCodeAt(i)) >>> 0;
+    }
+    const name = names[h % names.length];
+    if (name === undefined) throw new Error("themeFor: index out of bounds");
+    return name;
 }
 function tryParseJson(line: string): unknown[] {
     try {
