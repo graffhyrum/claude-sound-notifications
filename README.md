@@ -2,68 +2,69 @@
 
 Audible lifecycle feedback for Claude Code using StarCraft audio pools.
 
-Main agent events play SCV voices. Session-level outcomes play the Advisor.
+Each agent session is deterministically assigned one of three races (Terran, Zerg, Protoss) via a hash of its `session_id`. All sounds for that session play from that race's theme.
 
-## Sound mapping
+## Race themes
 
-| Event | Pool | Sound |
-|-------|------|-------|
-| `SessionStart` | `adjutant_online` | Advisor online |
-| `UserPromptSubmit` | `tscyes` | SCV acknowledging |
-| `PreToolUse` | `tscyes` | First tool per turn only |
-| `PermissionRequest` | `tscpss` | Frustrated — being asked for permission |
-| `PostToolUseFailure` | `need` | Advisor — needs attention |
-| `Notification` | `scanner` | Scanner ping |
-| `SubagentStart` | `tscrdy` | SCV ready |
-| `SubagentStop` | `tadupd` / `tscpss` | Advisor update (or annoyed if errors) |
-| `Stop` | `complete` / `need` | Advisor — success or error based on transcript |
-| `TeammateIdle` | `tscpss` | Frustrated |
-| `TaskCompleted` | `tadupd` | Advisor update |
-| `WorktreeCreate` | `liftoff` | Liftoff |
-| `WorktreeRemove` | `land` | Landing |
-| `PreCompact` | `getin` | Get in — compaction underway |
-| `SessionEnd` | `complete` / `landing` | Advisor — success or error |
+| Race | Session lifecycle | Action events | Error/failure |
+|------|------------------|---------------|---------------|
+| **Terran** | Adjutant (Advisor) | Marine / Ghost / SCV | Battlecruiser |
+| **Zerg** | Drone | Zergling / Hydralisk | Zerg Advisor |
+| **Protoss** | Probe | Zealot / Dark Templar | Protoss Advisor |
 
-`PreToolUse` uses a 60-second lockfile written at `UserPromptSubmit` so only the first tool call per turn plays `tscyes`, not every subsequent one.
+## Event mapping (Terran example)
+
+| Event | Unit | Pool | Notes |
+|-------|------|------|-------|
+| `SessionStart` | Advisor | `adjutant_online` | |
+| `UserPromptSubmit` | SCV | `tscyes` | Writes lockfile |
+| `PreToolUse` | Marine | `tmardy` | First tool per turn only (consumes lockfile) |
+| `PermissionRequest` | Ghost | `tghpss` | |
+| `PostToolUseFailure` | Battlecruiser | `tbapss` | |
+| `Notification` | misc | `scanner` | |
+| `SubagentStart` | Ghost | `tghrdy` | |
+| `SubagentStop` | Marine | `tmayes` / `tmapss` | Error pool if transcript has errors |
+| `Stop` | Advisor | `complete` / `need` | Error pool if transcript has errors |
+| `TeammateIdle` | Marine | `tmapss` | |
+| `TaskCompleted` | Medic | `tmdyes` | |
+| `WorktreeCreate` | misc | `liftoff` | Not registered in hooks.json |
+| `WorktreeRemove` | misc | `land` | Not registered in hooks.json |
+| `PreCompact` | misc | `getin` | |
+| `SessionEnd` | Advisor | `nuke_detected` / `landing` | Error pool if transcript has errors |
+
+Zerg and Protoss have analogous mappings using their own unit voices. See `spec/plugin-spec.md` §8 for full details.
 
 ## Audio pools
 
-Each pool is a set of WAV files sharing a filename prefix. One is picked at random per event.
+Each pool is a directory of WAV files sharing a filename prefix. One is picked at random per event.
 
 ```
-Advisor/   adjutant_online*.wav   complete*.wav   landing*.wav   need*.wav   tadupd*.wav
-SCV/       tscpss*.wav   tscrdy*.wav   tscyes*.wav
-misc/      getin*.wav   land*.wav   liftoff*.wav   scanner*.wav
+sounds/
+  terran/   Advisor/  SCV/  misc/  Marine/  Ghost/  Medic/  Battlecruiser/
+  zerg/     Advisor/  Drone/  Hydralisk/  Zergling/  misc/
+  protoss/  Advisor/  Probe/  Zealot/  DarkTemplar/
 ```
 
-To add a new variant to a pool, drop a file named `<prefix><nn>.wav` into the appropriate directory.
+To add a variant to a pool, drop a WAV named `<prefix><nn>.wav` into the appropriate directory.
 
 ## Remapping sounds
 
-Edit `EVENT_SOUNDS` in `scripts/sound-hook.ts`. Each entry is:
+Edit `THEMES` in `scripts/sound-hook.ts`. Each theme entry is:
 
 ```typescript
-EventName: { dir: SCV | ADVISOR | MISC, pool: "prefix", errorPool?: "prefix", lockfile?: "write" | "consume" }
+EventName: { dir: UNIT_PATH, pool: "prefix", errorPool?: "prefix", lockfile?: "write" | "consume" }
 ```
 
 Remove a line to silence that event. Add a line for any `ClaudeEvent` not currently mapped.
 
 ## Toggling
 
-A sentinel file at `~/.claude/sound-muted` silences all sounds immediately — no restart required. All concurrent Claude Code sessions share this state.
-
-**Toggle script:**
+A sentinel file at `~/.claude/sound-muted` silences all sounds immediately. All concurrent Claude Code sessions share this state.
 
 ```bash
 bun run ~/.claude/plugins/sound-notifications/scripts/sound-toggle.ts
-# → "Sound notifications: MUTED"   (silent from this point)
-# → "Sound notifications: UNMUTED" (plays adjutant_online confirmation)
-```
-
-**Suggested shell alias:**
-
-```bash
-alias sound-toggle='bun run ~/.claude/plugins/sound-notifications/scripts/sound-toggle.ts'
+# → "Sound notifications: MUTED"
+# → "Sound notifications: UNMUTED"  (plays race-appropriate online sound)
 ```
 
 **Direct control:**
@@ -75,20 +76,9 @@ rm ~/.claude/sound-muted      # unmute
 
 ## Installation
 
-### Permanent (registered)
-
 ```bash
 # Already done if you cloned dotclaude — the submodule is at:
 ~/.claude/plugins/sound-notifications
-
-# Register in installed_plugins.json + settings.json (see dotclaude setup)
-```
-
-### Per-session (alias)
-
-```bash
-# Add to ~/.zshrc:
-alias claude="claude --plugin-dir ~/.claude/plugins/sound-notifications"
 ```
 
 ## Requirements
@@ -100,10 +90,13 @@ alias claude="claude --plugin-dir ~/.claude/plugins/sound-notifications"
 
 ```bash
 cd ~/.claude/plugins/sound-notifications
-bun test scripts/sound-hook.test.ts   # 16 tests
+bun test                   # 56 tests
 
 # Smoke test an event directly:
 echo '{"session_id":"t1"}' | bun run scripts/sound-hook.ts SessionStart
 ```
 
-Logs write to `~/.claude/logs/sound-hook.log`.
+Logs write to `~/.claude/logs/sound-hook.log` in the format:
+```
+2026-03-17T12:00:00.000Z [terran] PreToolUse → tmardy
+```
