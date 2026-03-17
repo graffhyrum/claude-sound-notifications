@@ -130,10 +130,10 @@ async function dispatch(spec: SoundSpec, input: HookInput, player: string | null
         return;
     await playWithLogging(spec, player, input.transcript_path, input.hook_event_name, theme);
 }
-async function playWithLogging(spec: SoundSpec, player: string | null, transcriptPath?: string, eventName?: string, theme?: ThemeName): Promise<void> {
+async function playWithLogging(spec: SoundSpec, player: string | null, transcriptPath: string | undefined, eventName: string | undefined, theme: ThemeName): Promise<void> {
     const pool = await resolvePool(spec, transcriptPath);
     play(spec.dir, pool, player);
-    await log(eventName ?? "unknown", pool, theme ?? "terran");
+    await log(eventName ?? "unknown", pool, theme);
 }
 async function log(event: string, pool: string, theme: ThemeName): Promise<void> {
     try {
@@ -210,16 +210,14 @@ export async function isMuted(): Promise<boolean> {
 export function isClaudeEvent(s: string): s is ClaudeEvent {
     return CLAUDE_EVENT_SET.has(s);
 }
+const THEME_NAMES: ThemeName[] = ["terran", "zerg", "protoss"];
 // djb2 hash → unsigned 32-bit → mod 3 — pure, deterministic, no I/O
 export function themeFor(sessionId: string): ThemeName {
-    const names: ThemeName[] = ["terran", "zerg", "protoss"];
     let h = 5381;
     for (let i = 0; i < sessionId.length; i++) {
         h = (((h << 5) + h) ^ sessionId.charCodeAt(i)) >>> 0;
     }
-    const name = names[h % names.length];
-    if (name === undefined) throw new Error("themeFor: index out of bounds");
-    return name;
+    return THEME_NAMES[h % THEME_NAMES.length]!;
 }
 function tryParseJson(line: string): unknown[] {
     try {

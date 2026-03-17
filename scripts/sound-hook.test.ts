@@ -401,8 +401,9 @@ describe("themeFor", () => {
 
 	it("distributes roughly evenly across 300 session IDs", () => {
 		const counts: Record<ThemeName, number> = { terran: 0, zerg: 0, protoss: 0 };
+		// Deterministic IDs — no Math.random() so test cannot be flaky
 		for (let i = 0; i < 300; i++) {
-			counts[themeFor(`session-${i}-${Math.random()}`)]++;
+			counts[themeFor(`session-id-${i}`)]++;
 		}
 		// Each theme should get 70–130 of 300 (within ±10% of 100)
 		for (const theme of ["terran", "zerg", "protoss"] as ThemeName[]) {
