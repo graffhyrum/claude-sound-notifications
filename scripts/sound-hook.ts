@@ -9,7 +9,7 @@ const parseHookInput = type("string.json.parse").to({
     "session_id?": "string",
     "transcript_path?": "string",
     "tool_result?": { "is_error?": "boolean" },
-    "hook_event_name?": "string",
+    hook_event_name: "string",
 });
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ?? join(import.meta.dir, "..");
 const LOCKFILE_TTL_MS = 60000;
@@ -140,8 +140,8 @@ async function log(event: string, pool: string, theme: ThemeName): Promise<void>
         await rotateIfNeeded();
         await appendFile(LOG_FILE, `${new Date().toISOString()} [${theme}] ${event} → ${pool}\n`);
     }
-    catch {
-        // non-fatal: logging must never crash the hook
+    catch (e) {
+        console.error(`[sound-hook] log write failed: ${String(e)}`);
     }
 }
 async function rotateIfNeeded(): Promise<void> {
@@ -167,7 +167,8 @@ async function hasErrors(transcriptPath?: string): Promise<boolean> {
     try {
         return parseTranscriptErrors(await Bun.file(transcriptPath).text());
     }
-    catch {
+    catch (e) {
+        console.error(`[sound-hook] hasErrors failed: ${String(e)}`);
         return false;
     }
 }
@@ -225,19 +226,19 @@ function tryParseJson(line: string): unknown[] {
     try {
         return [JSON.parse(line)];
     }
-    catch {
-        return [];
+    catch (e) {
+        // Logging exemption: SyntaxError is expected on non-JSON transcript lines.
+        // Rethrow unexpected errors (OOM, TypeError, V8 internals).
+        if (e instanceof SyntaxError) return [];
+        throw e;
     }
 }
+const TranscriptEntry = type({ "tool_result?": { "is_error?": "boolean" } });
+
 function isToolError(e: unknown): boolean {
-    if (typeof e !== "object" || e === null)
-        return false;
-    const entry = e as {
-        tool_result?: {
-            is_error?: boolean;
-        };
-    };
-    return entry.tool_result?.is_error === true;
+    const result = TranscriptEntry(e);
+    if (result instanceof type.errors) return false;
+    return result.tool_result?.is_error === true;
 }
 export function playSound(path: string, player: string | null): void {
     if (!player)
@@ -261,17 +262,18 @@ export function poolFor(dir: string, prefix: string): string[] {
             .filter((f) => f.startsWith(prefix))
             .map((f) => join(dir, f));
     }
-    catch {
+    catch (e) {
+        console.error(`[sound-hook] poolFor failed: ${String(e)}`);
         return [];
     }
 }
 export function randomFrom(files: string[]): string {
     return files[Math.floor(Math.random() * files.length)] ?? "";
 }
+const UserEntry = type({ role: "'user'" });
+
 function isUserEntry(e: unknown): boolean {
-    return (typeof e === "object" &&
-        e !== null &&
-        (e as Record<string, unknown>).role === "user");
+    return !(UserEntry(e) instanceof type.errors);
 }
 export function lockfilePath(sessionId: string): string {
     const dir = join(process.env.HOME ?? homedir(), ".claude", "tmp");
@@ -288,8 +290,8 @@ async function deleteLockfile(path: string): Promise<void> {
     try {
         await unlink(path);
     }
-    catch {
-        // already gone
+    catch (e) {
+        console.error(`[sound-hook] deleteLockfile failed: ${String(e)}`);
     }
 }
 export async function readStdin(): Promise<HookInput> {

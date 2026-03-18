@@ -115,7 +115,7 @@ describe("findLastUserIndex", () => {
 });
 
 describe("lockfileValidAndFresh", () => {
-	const tmp = join("/tmp", `sound-hook-test-${process.pid}`);
+	const tmp = mkdtempSync("/tmp/sound-hook-test-") + `/lockfile-${process.pid}`;
 
 	it("returns false for nonexistent path", async () => {
 		expect(
@@ -438,7 +438,7 @@ describe("lockfilePath", () => {
 
 describe("truncateToLastN", () => {
 	it("truncates a file to the last N lines", async () => {
-		const tmp = join("/tmp", `truncate-test-${process.pid}`);
+		const tmp = mkdtempSync("/tmp/sound-hook-truncate-test-") + `/truncate-${process.pid}`;
 		const content = Array.from({ length: 100 }, (_, i) => `line-${i}`).join("\n") + "\n";
 		await writeFile(tmp, content, "utf8");
 		try {
