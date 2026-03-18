@@ -9,7 +9,7 @@ const parseHookInput = type("string.json.parse").to({
     "session_id?": "string",
     "transcript_path?": "string",
     "tool_result?": { "is_error?": "boolean" },
-    hook_event_name: "string",
+    "hook_event_name?": "string",
 });
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ?? join(import.meta.dir, "..");
 const LOCKFILE_TTL_MS = 60000;
