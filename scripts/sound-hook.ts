@@ -205,6 +205,7 @@ async function writeLockfileIfNeeded(lockfile: SoundSpec["lockfile"], sessionId:
         await Bun.write(lockfilePath(sessionId), "");
 }
 export async function isMuted(): Promise<boolean> {
+    if (process.env.SOUND_HOOK_MUTED === "1") return true;
     const home = process.env.HOME ?? homedir();
     return Bun.file(`${home}/.claude/sound-muted`).exists();
 }

@@ -136,9 +136,12 @@ describe("lockfileValidAndFresh", () => {
 describe("isMuted", () => {
 	let tmpHome: string;
 	let originalHome: string | undefined;
+	let originalMuted: string | undefined;
 
 	beforeAll(() => {
 		originalHome = process.env.HOME;
+		originalMuted = process.env.SOUND_HOOK_MUTED;
+		delete process.env.SOUND_HOOK_MUTED;
 		tmpHome = mkdtempSync("/tmp/sound-hook-test-home-");
 		mkdirSync(join(tmpHome, ".claude"));
 		process.env.HOME = tmpHome;
@@ -150,11 +153,25 @@ describe("isMuted", () => {
 		} else {
 			delete process.env.HOME;
 		}
+		if (originalMuted !== undefined) {
+			process.env.SOUND_HOOK_MUTED = originalMuted;
+		} else {
+			delete process.env.SOUND_HOOK_MUTED;
+		}
 		rmSync(tmpHome, { recursive: true, force: true });
 	});
 
 	it("returns false when sentinel file absent", async () => {
 		expect(await isMuted()).toBe(false);
+	});
+
+	it("returns true when SOUND_HOOK_MUTED env var is set", async () => {
+		process.env.SOUND_HOOK_MUTED = "1";
+		try {
+			expect(await isMuted()).toBe(true);
+		} finally {
+			delete process.env.SOUND_HOOK_MUTED;
+		}
 	});
 
 	it("returns true when sentinel file exists", async () => {
@@ -522,7 +539,7 @@ describe("run (subprocess)", () => {
 	it("exits 0 for a valid event when stdin is empty", () => {
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
-			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe" },
+			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe", env: { ...process.env, SOUND_HOOK_MUTED: "1" } },
 		);
 		// Should exit 0 — empty stdin produces {} input, route resolves
 		expect(result.exitCode).toBe(0);
@@ -531,7 +548,7 @@ describe("run (subprocess)", () => {
 	it("exits 1 when no event argument is provided", () => {
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "sound-hook.ts")],
-			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe" },
+			{ stdin: new Blob([""]), stdout: "pipe", stderr: "pipe", env: { ...process.env, SOUND_HOOK_MUTED: "1" } },
 		);
 		expect(result.exitCode).toBe(1);
 		expect(result.stderr.toString()).toContain("Usage:");
@@ -541,7 +558,7 @@ describe("run (subprocess)", () => {
 		const input = JSON.stringify({ session_id: "test-run-subprocess" });
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
-			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" },
+			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", env: { ...process.env, SOUND_HOOK_MUTED: "1" } },
 		);
 		expect(result.exitCode).toBe(0);
 	});
@@ -552,7 +569,7 @@ describe("readStdin (via subprocess)", () => {
 		const input = JSON.stringify({ session_id: "stdin-test", hook_event_name: "Stop" });
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "Stop"],
-			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" },
+			{ stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", env: { ...process.env, SOUND_HOOK_MUTED: "1" } },
 		);
 		expect(result.exitCode).toBe(0);
 	});
@@ -560,7 +577,7 @@ describe("readStdin (via subprocess)", () => {
 	it("handles invalid JSON stdin gracefully (falls back to {})", () => {
 		const result = Bun.spawnSync(
 			["bun", "run", join(import.meta.dir, "sound-hook.ts"), "SessionStart"],
-			{ stdin: new Blob(["not valid json {{{"]), stdout: "pipe", stderr: "pipe" },
+			{ stdin: new Blob(["not valid json {{{"]), stdout: "pipe", stderr: "pipe", env: { ...process.env, SOUND_HOOK_MUTED: "1" } },
 		);
 		expect(result.exitCode).toBe(0);
 	});
