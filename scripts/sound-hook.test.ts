@@ -497,7 +497,7 @@ describe("log rotation via route", () => {
 	it("truncates log file when it exceeds 1MB", async () => {
 		// Create a log file larger than 1MB (LOG_MAX_BYTES = 1048576)
 		const bigLine = "X".repeat(200);
-		const lineCount = 6000; // 6000 * ~220 bytes > 1MB
+		const lineCount = 10000; // 10000 * ~240 bytes > 1MB
 		const content = Array.from({ length: lineCount }, (_, i) => `2026-01-01T00:00:00Z [terran] event-${i} ${bigLine}`).join("\n") + "\n";
 		await writeFile(logFile, content, "utf8");
 
